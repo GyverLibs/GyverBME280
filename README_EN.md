@@ -1,3 +1,5 @@
+This is an automatic translation, may be incorrect in some places. See sources and examples!
+
 # GyverBME280
 Lightweight BME280 I2C library for Arduino
 
