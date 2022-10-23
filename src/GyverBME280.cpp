@@ -8,7 +8,7 @@ float pressureToAltitude(float pressure) {
     return 44330.0 * (1.0 - pow(pressure / 1013.25, 0.1903));	// Сalculate altitude
 }
 
-float pressureToMmHg(float pressure) {							
+float pressureToMmHg(float pressure) {
     return (float)(pressure * 0.00750061683f);					// Convert [Pa] to [mm Hg]
 }
 
@@ -18,10 +18,18 @@ bool GyverBME280::begin(void) {
     return begin(0x76);
 }
 
-bool GyverBME280::begin(uint8_t address) {	
+bool GyverBME280::begin(uint8_t address) {
+    return begin(address, SDA, SCL);
+}
+
+bool GyverBME280::begin(int sda, int scl) {
+    return begin(0x76, sda, scl);
+}
+
+bool GyverBME280::begin(uint8_t address, int sda, int scl) {
     _i2c_address = address;
     /* === Start I2C bus & check BME280 === */
-    Wire.begin();                             		// Start I2C bus 
+    Wire.begin(sda, scl);                             		// Start I2C bus
     if (!reset()) return false;                     // BME280 software reset & ack check
     uint8_t ID = readRegister(0xD0);
     if (ID != 0x60 && ID != 0x58) return false;	    // Check chip ID (bme/bmp280)
@@ -68,9 +76,9 @@ int32_t GyverBME280::readTempInt(void) {
 
     temp_raw >>= 4;													// Start temperature reading in integers
     int32_t value_1 = ((((temp_raw >> 3) - ((int32_t)CalibrationData._T1 << 1))) *
-    ((int32_t)CalibrationData._T2)) >> 11;
-    int32_t value_2 = (((((temp_raw >> 4) - ((int32_t)CalibrationData._T1)) * 
-    ((temp_raw >> 4) - ((int32_t)CalibrationData._T1))) >> 12) * ((int32_t)CalibrationData._T3)) >> 14;
+                       ((int32_t)CalibrationData._T2)) >> 11;
+    int32_t value_2 = (((((temp_raw >> 4) - ((int32_t)CalibrationData._T1)) *
+                         ((temp_raw >> 4) - ((int32_t)CalibrationData._T1))) >> 12) * ((int32_t)CalibrationData._T3)) >> 14;
 
     return ((int32_t)value_1 + value_2);							// Return temperature in integers
 }
@@ -103,24 +111,25 @@ float GyverBME280::readPressure(void) {
     value_2 = (((int64_t)CalibrationData._P8) * p) >> 19;
     p = ((p + value_1 + value_2) >> 8) + (((int64_t)CalibrationData._P7) << 4);
 
-    return (float)p / 256;											// Return pressure in float				
+    return (float)p / 256;											// Return pressure in float
 }
 
 
 float GyverBME280::readHumidity(void) {
     Wire.beginTransmission(_i2c_address);									// Start I2C transmission
-    Wire.write(0xFD);												   		// Request humidity data register	
-    if (Wire.endTransmission() != 0) return 0;										
-    Wire.requestFrom(_i2c_address, 2);										// Request humidity data 
-    int32_t hum_raw = ((uint16_t)Wire.read() << 8) | (uint16_t)Wire.read();	// Read humidity data 
+    Wire.write(0xFD);												   		// Request humidity data register
+    if (Wire.endTransmission() != 0) return 0;
+    Wire.requestFrom(_i2c_address, 2);										// Request humidity data
+    int32_t hum_raw = ((uint16_t)Wire.read() << 8) | (uint16_t)Wire.read();	// Read humidity data
     if (hum_raw == 0x8000) return 0;										// If the humidity module has been disabled return '0'
 
     int32_t value  = (readTempInt() - ((int32_t)76800));		            // Start humidity converting
-    value = (((((hum_raw << 14) - (((int32_t)CalibrationData._H4) << 20) -
-    (((int32_t)CalibrationData._H5) * value)) +((int32_t)16384)) >> 15) * 
-    (((((((value * ((int32_t)CalibrationData._H6)) >> 10) *(((value * 
-    ((int32_t)CalibrationData._H3)) >> 11) + ((int32_t)32768))) >> 10) +
-    ((int32_t)2097152)) * ((int32_t)CalibrationData._H2) + 8192) >> 14));
+    value = (((((hum_raw << 14) - (((int32_t) CalibrationData._H4) << 20) -
+                (((int32_t) CalibrationData._H5) * value)) + ((int32_t) 16384)) >> 15) *
+             (((((((value * ((int32_t) CalibrationData._H6)) >> 10) *
+                  (((value * ((int32_t) CalibrationData._H3)) >> 11) +
+                   ((int32_t) 32768))) >> 10) +
+                ((int32_t) 2097152)) * ((int32_t) CalibrationData._H2) + 8192) >> 14));
     value = (value - (((((value >> 15) * (value >> 15)) >> 7) * ((int32_t)CalibrationData._H1)) >> 4));
     value = (value < 0) ? 0 : value;
     value = (value > 419430400) ? 419430400 : value;
@@ -131,7 +140,7 @@ float GyverBME280::readHumidity(void) {
 
 /* ============ Misc ============ */
 
-bool GyverBME280::isMeasuring(void)	{								
+bool GyverBME280::isMeasuring(void)	{
     return (bool)((readRegister(0xF3) & 0x08) >> 3);            // Read status register & mask bit "measuring"
 }
 
@@ -145,14 +154,14 @@ GyverBME280::GyverBME280() {}
 
 /* = BME280 software reset = */
 bool GyverBME280::reset(void) {
-    if (!writeRegister(0x0E , 0xB6)) return false; 
+    if (!writeRegister(0x0E , 0xB6)) return false;
     delay(10);
     return true;
 }
 
 
 /* = Read and combine three BME280 registers = */
-uint32_t GyverBME280::readRegister24(uint8_t address) {	 
+uint32_t GyverBME280::readRegister24(uint8_t address) {
     Wire.beginTransmission(_i2c_address);
     Wire.write(address);
     if (Wire.endTransmission() != 0) return 0x800000;
