@@ -52,7 +52,11 @@ class GyverBME280 {
 public:
     GyverBME280();								// Create an object of class BME280
     bool begin(void);							// Initialize sensor with standart 0x76 address	
-    bool begin(uint8_t address);				// Initialize sensor with not standart 0x76 address	
+    bool begin(                                 // Initialize sensor with not standart 0x76 address	
+        uint8_t address, 
+        int __attribute__((unused)) sda = 0, 
+        int __attribute__((unused)) scl = 0
+    );	
     bool isMeasuring(void);						// Returns 'true' while the measurement is in progress					
     float readPressure(void);					// Read and calculate atmospheric pressure [float , Pa]
     float readHumidity(void);					// Read and calculate air humidity [float , %]
