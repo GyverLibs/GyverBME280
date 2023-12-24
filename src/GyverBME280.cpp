@@ -18,10 +18,15 @@ bool GyverBME280::begin(void) {
     return begin(0x76);
 }
 
-bool GyverBME280::begin(uint8_t address) {	
+bool GyverBME280::begin(uint8_t address, int __attribute__((unused)) sda, int __attribute__((unused)) scl) {	
     _i2c_address = address;
     /* === Start I2C bus & check BME280 === */
-    Wire.begin();                             		// Start I2C bus 
+#if defined(ESP32) || defined (ESP8266)
+            if (sda || scl) Wire.begin(sda, scl);   // Start I2C bus with custom pins
+            else Wire.begin();
+#else
+            Wire.begin();                           // Start I2C bus 
+#endif
     if (!reset()) return false;                     // BME280 software reset & ack check
     uint8_t ID = readRegister(0xD0);
     if (ID != 0x60 && ID != 0x58) return false;	    // Check chip ID (bme/bmp280)
