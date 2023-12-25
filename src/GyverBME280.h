@@ -51,9 +51,11 @@ class GyverBME280 {
 
 public:
     GyverBME280();								// Create an object of class BME280
-    bool begin(void);							// Initialize sensor with standart 0x76 address	
-    bool begin(uint8_t address);				// Initialize sensor with not standart 0x76 address	
-    bool isMeasuring(void);						// Returns 'true' while the measurement is in progress					
+    bool begin(void);							// Initialize sensor with standart 0x76 address
+    bool begin(uint8_t address);				// Initialize sensor with not standart 0x76 address
+    bool begin(uint8_t address, int sda, int scl);
+    bool begin(int sda, int scl);
+    bool isMeasuring(void);						// Returns 'true' while the measurement is in progress
     float readPressure(void);					// Read and calculate atmospheric pressure [float , Pa]
     float readHumidity(void);					// Read and calculate air humidity [float , %]
     void oneMeasurement(void);					// Make one measurement and go back to sleep [FORCED_MODE only]
@@ -76,8 +78,8 @@ private:
     uint8_t _hum_oversampl = OVERSAMPLING_1;	// Humidity module oversampling parameter     |
     uint8_t _press_oversampl = OVERSAMPLING_2;	// Pressure module oversampling parameter     |
     //========================================================================================|
-    
-    bool reset(void);                                   	// BME280 software reset 
+
+    bool reset(void);                                   	// BME280 software reset
     int32_t readTempInt();                              	// Temperature reading in integers for the function of reading
     void readCalibrationData(void);                     	// Read all cells containing calibration values
     uint8_t readRegister(uint8_t address);					// Read one 8-bit BME280 register
@@ -106,6 +108,6 @@ private:
     } CalibrationData;
 };
 
-float pressureToMmHg(float pressure);		// Convert [Pa] to [mm Hg]  
+float pressureToMmHg(float pressure);		// Convert [Pa] to [mm Hg]
 float pressureToAltitude(float pressure);	// Convert pressure to altitude
 #endif
