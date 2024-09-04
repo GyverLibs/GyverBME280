@@ -44,13 +44,32 @@
 #define FILTER_COEF_8 0x03
 #define FILTER_COEF_16 0x04
 
+// calibration block T1..T3, P1..P9, H1
+#define BME280_CALIB_DATA1 0x88
+// calibration block H2..H6
+#define BME280_CALIB_DATA2 0xE1
+// actual sensor data
+#define BME280_CONTROLHUMID 0xF2
+#define BME280_STATUS 0xF3
+#define BME280_CONTROL 0xF4
+#define BME280_CONFIG 0xF5
+#define BME280_PRESSUREDATA 0xF7
+#define BME280_TEMPDATA 0xFA
+#define BME280_HUMIDDATA 0xFD
+// module info
+#define BME280_CHIPID 0xD0
+#define BME280_VERSION 0xD1
+// reset control
+#define BME280_SOFTRESET 0xE0
+
+#define REF_PRESSURE 101325
 // ================================= CLASS ===================================
 
 class GyverBME280 {
    public:
     GyverBME280();                // Create an object of class BME280
-    bool begin(void);             // Initialize sensor with standart 0x76 address
-    bool begin(uint8_t address);  // Initialize sensor with not standart 0x76 address
+    bool begin(TwoWire &wirePort = Wire);             // Initialize sensor with standart 0x76 address
+    bool begin(uint8_t address, TwoWire &wirePort);  // Initialize sensor with custom address and optionally wire lines
     bool isMeasuring(void);       // Returns 'true' while the measurement is in progress
     float readPressure(void);     // Read and calculate atmospheric pressure [float , Pa]
     float readHumidity(void);     // Read and calculate air humidity [float , %]
@@ -66,6 +85,7 @@ class GyverBME280 {
    private:
     //============================== DEFAULT SETTINGS ========================================|
     int _i2c_address = 0x76;                    // BME280 address on I2C bus                  |
+    TwoWire *_wire = 0;                         // Default to Wire port
     uint8_t _operating_mode = NORMAL_MODE;      // Sensor operation mode                      |
     uint8_t _standby_time = STANDBY_250MS;      // Time between measurements in NORMAL_MODE      |
     uint8_t _filter_coef = FILTER_COEF_16;      // Filter ratio IIR                           |
