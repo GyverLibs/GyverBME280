@@ -172,7 +172,7 @@ void GyverBME280::readCalibrationData(void) {
     Wire.beginTransmission(_i2c_address);
     Wire.write(0x88);
     if (Wire.endTransmission() != 0) return;
-    Wire.requestFrom(_i2c_address, 25);
+    Wire.requestFrom(_i2c_address, 26);
     /* reading */
     CalibrationData._T1 = (Wire.read() | (Wire.read() << 8));
     CalibrationData._T2 = (Wire.read() | (Wire.read() << 8));
@@ -186,6 +186,7 @@ void GyverBME280::readCalibrationData(void) {
     CalibrationData._P7 = (Wire.read() | (Wire.read() << 8));
     CalibrationData._P8 = (Wire.read() | (Wire.read() << 8));
     CalibrationData._P9 = (Wire.read() | (Wire.read() << 8));
+    Wire.read();  // skip 25
     CalibrationData._H1 = Wire.read();
 
     /* second part request*/
