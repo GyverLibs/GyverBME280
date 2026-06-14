@@ -59,16 +59,56 @@ void GyverBME280::setPressOversampling(uint8_t mode) {
     _press_oversampl = mode;
 }
 
+void GyverBME280::setDataMode(uint8_t mode) {
+    _data_mode = mode;
+}
+
+void GyverBME280::setAlpha(float alpha) {
+    _alpha = alpha;
+}
+
+void GyverBME280::initInterpolateData() {
+    InterpolateData.temperature[0] = 2000;
+    InterpolateData.pressure[0] = 1013.25;
+    InterpolateData.humidity[0] = 50.00;
+}
+
 /* ============ Reading ============ */
 
 int32_t GyverBME280::readTempInt(void) {
     int32_t temp_raw = readRegister24(0xFA);  // Read 24-bit value
-    if (temp_raw == 0x800000) return 0;       // If the temperature module has been disabled return '0'
+    if (temp_raw == 0x800000) {
+        switch (_data_mode) {
+            case MODE_DATA_LAST_VALID:
+            case MODE_DATA_INTERPOLATED_LINE:
+            case MODE_DATA_INTERPOLATED_GAUS:
+                return InterpolateData.temperature[0]; // Returns the last value of the correctly received data
+            case MODE_DATA_DEFAULT:
+            default:
+                return 0; // If the temperature module has been disabled return '0'
+        }
+    }       
 
     temp_raw >>= 4;  // Start temperature reading in integers
     int32_t value_1 = ((((temp_raw >> 3) - ((int32_t)CalibrationData._T1 << 1))) * ((int32_t)CalibrationData._T2)) >> 11;
     int32_t value_2 = (((((temp_raw >> 4) - ((int32_t)CalibrationData._T1)) * ((temp_raw >> 4) - ((int32_t)CalibrationData._T1))) >> 12) * ((int32_t)CalibrationData._T3)) >> 14;
-    return ((int32_t)value_1 + value_2);  // Return temperature in integers
+    int32_t reset_value = ((int32_t)value_1 + value_2);
+    switch (_data_mode) {
+        case MODE_DATA_LAST_VALID:
+            updateInterpolateData(reset_value, InterpolateData.temperature);
+            return InterpolateData.temperature[0]; // Returns the last value of the correctly received data
+        case MODE_DATA_INTERPOLATED_LINE:
+            reset_value = linear_interpolate(InterpolateData.temperature);
+            updateInterpolateData(reset_value, InterpolateData.temperature);
+            return InterpolateData.temperature[0]; // Returns linearly interpolated data
+        case MODE_DATA_INTERPOLATED_GAUS:
+            reset_value = gaussian_interpolate(InterpolateData.temperature);
+            updateInterpolateData(reset_value, InterpolateData.temperature);
+            return InterpolateData.temperature[0]; // Returns Gaussian interpolated data
+        case MODE_DATA_DEFAULT:
+        default:
+            return reset_value;  // Return temperature in integers
+    }
 }
 
 float GyverBME280::readTemperature(void) {
@@ -79,8 +119,17 @@ float GyverBME280::readTemperature(void) {
 
 float GyverBME280::readPressure(void) {
     uint32_t press_raw = readRegister24(0xF7);  // Read 24-bit value
-    if (press_raw == 0x800000) return 0;        // If the pressure module has been disabled return '0'
-
+    if (press_raw == 0x800000) {
+        switch (_data_mode) {
+            case MODE_DATA_LAST_VALID:
+            case MODE_DATA_INTERPOLATED_LINE:
+            case MODE_DATA_INTERPOLATED_GAUS:
+                return InterpolateData.pressure[0]; // Returns the last value of the correctly received data
+            case MODE_DATA_DEFAULT:
+            default:
+                return 0; // If the temperature module has been disabled return '0'
+        }
+    }
     press_raw >>= 4;  // Start pressure converting
     int64_t value_1 = ((int64_t)readTempInt()) - 128000;
     int64_t value_2 = value_1 * value_1 * (int64_t)CalibrationData._P6;
@@ -89,24 +138,69 @@ float GyverBME280::readPressure(void) {
     value_1 = ((value_1 * value_1 * (int64_t)CalibrationData._P3) >> 8) + ((value_1 * (int64_t)CalibrationData._P2) << 12);
     value_1 = (((((int64_t)1) << 47) + value_1)) * ((int64_t)CalibrationData._P1) >> 33;
 
-    if (!value_1) return 0;  // Avoid division by zero
+    if (!value_1) {
+        switch (_data_mode) {
+            case MODE_DATA_LAST_VALID:
+            case MODE_DATA_INTERPOLATED_LINE:
+            case MODE_DATA_INTERPOLATED_GAUS:
+                return InterpolateData.pressure[0]; // Returns the last value of the correctly received data
+            case MODE_DATA_DEFAULT:
+            default:
+                return 0;  // Avoid division by zero
+        }
+    }
 
     int64_t p = 1048576 - press_raw;
     p = (((p << 31) - value_2) * 3125) / value_1;
     value_1 = (((int64_t)CalibrationData._P9) * (p >> 13) * (p >> 13)) >> 25;
     value_2 = (((int64_t)CalibrationData._P8) * p) >> 19;
     p = ((p + value_1 + value_2) >> 8) + (((int64_t)CalibrationData._P7) << 4);
-
-    return (float)p / 256;  // Return pressure in float
+    float reset_value = (float)p / 256;
+    switch (_data_mode) {
+        case MODE_DATA_LAST_VALID:
+            updateInterpolateData(reset_value, InterpolateData.pressure);
+            return InterpolateData.pressure[0]; // Returns the last value of the correctly received data
+        case MODE_DATA_INTERPOLATED_LINE:
+            reset_value = linear_interpolate(InterpolateData.pressure);
+            updateInterpolateData(reset_value, InterpolateData.pressure);
+            return InterpolateData.pressure[0]; // Returns linearly interpolated data
+        case MODE_DATA_INTERPOLATED_GAUS:
+            reset_value = gaussian_interpolate(InterpolateData.pressure);
+            updateInterpolateData(reset_value, InterpolateData.pressure);
+            return InterpolateData.pressure[0]; // Returns Gaussian interpolated data
+        case MODE_DATA_DEFAULT:
+        default:
+            return reset_value;  // Return pressure in float
+    }
 }
 
 float GyverBME280::readHumidity(void) {
     Wire.beginTransmission(_i2c_address);  // Start I2C transmission
     Wire.write(0xFD);                      // Request humidity data register
-    if (Wire.endTransmission() != 0) return 0;
+    if (Wire.endTransmission() != 0) {
+        switch (_data_mode) {
+            case MODE_DATA_LAST_VALID:
+            case MODE_DATA_INTERPOLATED_LINE:
+            case MODE_DATA_INTERPOLATED_GAUS:
+                return InterpolateData.humidity[0]; // Returns the last value of the correctly received data
+            case MODE_DATA_DEFAULT:
+            default:
+                return 0;
+        }
+    }
     Wire.requestFrom(_i2c_address, 2);                                       // Request humidity data
     int32_t hum_raw = ((uint16_t)Wire.read() << 8) | (uint16_t)Wire.read();  // Read humidity data
-    if (hum_raw == 0x8000) return 0;                                         // If the humidity module has been disabled return '0'
+    if (hum_raw == 0x8000) {
+        switch (_data_mode) {
+            case MODE_DATA_LAST_VALID:
+            case MODE_DATA_INTERPOLATED_LINE:
+            case MODE_DATA_INTERPOLATED_GAUS:
+                return InterpolateData.humidity[0]; // Returns the last value of the correctly received data
+            case MODE_DATA_DEFAULT:
+            default:
+                return 0;  // If the humidity module has been disabled return '0'
+        }
+    }                                        
 
     int32_t value = (readTempInt() - ((int32_t)76800));  // Start humidity converting
     value = (((((hum_raw << 14) - (((int32_t)CalibrationData._H4) << 20) - (((int32_t)CalibrationData._H5) * value)) + ((int32_t)16384)) >> 15) * (((((((value * ((int32_t)CalibrationData._H6)) >> 10) * (((value * ((int32_t)CalibrationData._H3)) >> 11) + ((int32_t)32768))) >> 10) + ((int32_t)2097152)) * ((int32_t)CalibrationData._H2) + 8192) >> 14));
@@ -114,8 +208,23 @@ float GyverBME280::readHumidity(void) {
     value = (value < 0) ? 0 : value;
     value = (value > 419430400) ? 419430400 : value;
     float h = (value >> 12);
-
-    return h / 1024.0;  // Return humidity in float
+    float reset_value = (float)h / 1024.0;
+    switch (_data_mode) {
+        case MODE_DATA_LAST_VALID:
+            updateInterpolateData(reset_value, InterpolateData.humidity);
+            return InterpolateData.humidity[0]; // Returns the last value of the correctly received data
+        case MODE_DATA_INTERPOLATED_LINE:
+            reset_value = linear_interpolate(InterpolateData.humidity);
+            updateInterpolateData(reset_value, InterpolateData.humidity);
+            return InterpolateData.humidity[0]; // Returns linearly interpolated data
+        case MODE_DATA_INTERPOLATED_GAUS:
+            reset_value = gaussian_interpolate(InterpolateData.humidity);
+            updateInterpolateData(reset_value, InterpolateData.humidity);
+            return InterpolateData.humidity[0]; // Returns Gaussian interpolated data
+        case MODE_DATA_DEFAULT:
+        default:
+            return reset_value;  // Return humidity in float
+    }
 }
 
 /* ============ Misc ============ */
@@ -202,4 +311,41 @@ void GyverBME280::readCalibrationData(void) {
     CalibrationData._H4 |= (interVal & 0xF);
     CalibrationData._H5 = (((interVal & 0xF0) >> 4) | (Wire.read() << 4));
     CalibrationData._H6 = Wire.read();
+}
+
+void GyverBME280::updateInterpolateData(float newValue, float* dataArray) {
+    dataArray[1] = dataArray[0]; // Shifting the last value
+    dataArray[0] = newValue;     // Saving the new value
+}
+
+void GyverBME280::updateInterpolateData(int32_t newValue, int32_t* dataArray) {
+    dataArray[1] = dataArray[0]; // Shifting the last value
+    dataArray[0] = newValue;     // Saving the new value
+}
+
+float GyverBME280::linear_interpolate(float* dataArray) {
+    if (dataArray[0] == dataArray[1]) {
+        return dataArray[0];
+    }
+    return dataArray[0] + _alpha * (dataArray[1] - dataArray[0]);
+}
+
+int32_t GyverBME280::linear_interpolate(int32_t* dataArray) {
+    if (dataArray[0] == dataArray[1]) {
+        return dataArray[0];
+    }
+    return dataArray[0] + _alpha * (dataArray[1] - dataArray[0]);
+}
+float GyverBME280::gaussian_interpolate(float* dataArray) {
+    if (dataArray[0] == dataArray[1]) {
+        return dataArray[0];
+    }
+    return dataArray[0] * exp(-_alpha * _alpha / 2) + dataArray[1] * (1 - exp(-_alpha * _alpha / 2));
+}
+
+int32_t GyverBME280::gaussian_interpolate(int32_t* dataArray) {
+    if (dataArray[0] == dataArray[1]) {
+        return dataArray[0];
+    }
+    return dataArray[0] * exp(-_alpha * _alpha / 2) + dataArray[1] * (1 - exp(-_alpha * _alpha / 2));
 }

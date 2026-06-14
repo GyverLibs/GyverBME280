@@ -18,6 +18,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <cmath>
 
 #define NORMAL_MODE 0x03
 #define FORCED_MODE 0x02
@@ -44,6 +45,11 @@
 #define FILTER_COEF_8 0x03
 #define FILTER_COEF_16 0x04
 
+#define MODE_DATA_DEFAULT  0x00
+#define MODE_DATA_LAST_VALID  0x01
+#define MODE_DATA_INTERPOLATED_LINE  0x02
+#define MODE_DATA_INTERPOLATED_GAUS  0x03
+
 // ================================= CLASS ===================================
 
 class GyverBME280 {
@@ -62,16 +68,21 @@ class GyverBME280 {
     void setHumOversampling(uint8_t mode);    // Set oversampling or disable humidity module [before begin()]
     void setTempOversampling(uint8_t mode);   // Set oversampling or disable temperature module [before begin()]
     void setPressOversampling(uint8_t mode);  // Set oversampling or disable pressure module [before begin()]
+    void setDataMode(uint8_t mode);           // Set the data mode for the humidity, temperature and pressure
+    void setAlpha(float alpha);               // Set the alpha value for the humidity, temperature and pressure
+    void initInterpolateData();               // Initialize the interpolate data
 
    private:
     //============================== DEFAULT SETTINGS ========================================|
     int _i2c_address = 0x76;                    // BME280 address on I2C bus                  |
     uint8_t _operating_mode = NORMAL_MODE;      // Sensor operation mode                      |
-    uint8_t _standby_time = STANDBY_250MS;      // Time between measurements in NORMAL_MODE      |
+    uint8_t _standby_time = STANDBY_250MS;      // Time between measurements in NORMAL_MODE   |
     uint8_t _filter_coef = FILTER_COEF_16;      // Filter ratio IIR                           |
     uint8_t _temp_oversampl = OVERSAMPLING_4;   // Temperature module oversampling parameter  |
     uint8_t _hum_oversampl = OVERSAMPLING_1;    // Humidity module oversampling parameter     |
     uint8_t _press_oversampl = OVERSAMPLING_2;  // Pressure module oversampling parameter     |
+    uint8_t _data_mode = MODE_DATA_DEFAULT;     // Data output mode: default (0x00)           |
+    float _alpha = 0.5f;                        // Alpha for initialization                   |
     //========================================================================================|
 
     bool reset(void);                                   // BME280 software reset
@@ -80,6 +91,12 @@ class GyverBME280 {
     uint8_t readRegister(uint8_t address);              // Read one 8-bit BME280 register
     uint32_t readRegister24(uint8_t address);           // Read and combine three BME280 registers
     bool writeRegister(uint8_t address, uint8_t data);  // Write one 8-bit BME280 register
+    void updateInterpolateData(float newValue, float* dataArray) {};     // Update interpolation parameters float
+    void updateInterpolateData(int32_t newValue, int32_t* dataArray) {}; // Update interpolation parameters int32_t
+    float linear_interpolate(float* dataArray) {};
+    int32_t linear_interpolate(int32_t* dataArray) {};
+    float gaussian_interpolate(float* dataArray) {};
+    int32_t gaussian_interpolate(int32_t* dataArray) {};
 
     struct {  // Structure to store all calibration values
         uint16_t _T1;
@@ -101,6 +118,13 @@ class GyverBME280 {
         int16_t _H5;
         int8_t _H6;
     } CalibrationData;
+    
+    struct {  // A structure for storing the last two correct values used for interpolation
+        int32_t temperature[2];     // The last two correct temperature values
+        float pressure[2];    // The last two correct pressure values
+        float humidity[2];    // The last two correct humidity values
+    } InterpolateData;
+    
 };
 
 float pressureToMmHg(float pressure);      // Convert [Pa] to [mm Hg]
