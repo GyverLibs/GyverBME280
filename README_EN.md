@@ -48,13 +48,13 @@ GyverBME280 bme;
 <a id="usage"></a>
 ## Use of use
 ```cpp
-bool begin(void);                           // Start with a standard address (0x76)
+bool begin();                               // Start with a standard address (0x76)
 bool begin(uint8_t address);                // launch
-bool isMeasuring(void);                     // It returns true while the measurement is in progress.
-float readPressure(void);                   // pressurize
-float readHumidity(void);                   // Read humidity in %
-void oneMeasurement(void);                  // Take one dimension and go to sleep
-float readTemperature(void);                // Read the temperature in degrees C
+bool isMeasuring();                         // It returns true while the measurement is in progress.
+float readPressure();                       // pressurize
+float readHumidity();                       // Read humidity in %
+void oneMeasurement();                      // Take one dimension and go to sleep
+float readTemperature();                    // Read the temperature in degrees C
 
 void setMode(uint8_t mode);                 // set up
 // regimes

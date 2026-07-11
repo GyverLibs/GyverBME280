@@ -49,14 +49,14 @@
 class GyverBME280 {
    public:
     GyverBME280();                // Create an object of class BME280
-    bool begin(void);             // Initialize sensor with standart 0x76 address
+    bool begin();                 // Initialize sensor with standart 0x76 address
     bool begin(uint8_t address);  // Initialize sensor with not standart 0x76 address
-    bool isMeasuring(void);       // Returns 'true' while the measurement is in progress
-    float readPressure(void);     // Read and calculate atmospheric pressure [float , Pa]
-    float readHumidity(void);     // Read and calculate air humidity [float , %]
-    void oneMeasurement(void);    // Make one measurement and go back to sleep [FORCED_MODE only]
+    bool isMeasuring();           // Returns 'true' while the measurement is in progress
+    float readPressure();         // Read and calculate atmospheric pressure [float , Pa]
+    float readHumidity();         // Read and calculate air humidity [float , %]
+    void oneMeasurement();        // Make one measurement and go back to sleep [FORCED_MODE only]
     void setMode(uint8_t mode);
-    float readTemperature(void);              // Read and calculate air temperature [float , *C]
+    float readTemperature();                  // Read and calculate air temperature [float , *C]
     void setFilter(uint8_t mode);             // Adjust the filter ratio other than the standard one [before begin()]
     void setStandbyTime(uint8_t mode);        // Adjust the sleep time between measurements [NORMAL_MODE only][before begin()]
     void setHumOversampling(uint8_t mode);    // Set oversampling or disable humidity module [before begin()]
@@ -74,12 +74,17 @@ class GyverBME280 {
     uint8_t _press_oversampl = OVERSAMPLING_2;  // Pressure module oversampling parameter     |
     //========================================================================================|
 
-    bool reset(void);                                   // BME280 software reset
+    bool reset();                                       // BME280 software reset
     int32_t readTempInt();                              // Temperature reading in integers for the function of reading
-    void readCalibrationData(void);                     // Read all cells containing calibration values
+    bool readCalibrationData();                         // Read all cells containing calibration values
     uint8_t readRegister(uint8_t address);              // Read one 8-bit BME280 register
     uint32_t readRegister24(uint8_t address);           // Read and combine three BME280 registers
     bool writeRegister(uint8_t address, uint8_t data);  // Write one 8-bit BME280 register
+    uint8_t readByte();
+    uint16_t readU16LE();
+    int16_t readS16LE();
+    int16_t signExtend12(uint16_t value);
+    bool requestBytes(uint8_t address, uint8_t len);
 
     struct {  // Structure to store all calibration values
         uint16_t _T1;
@@ -101,6 +106,7 @@ class GyverBME280 {
         int16_t _H5;
         int8_t _H6;
     } CalibrationData;
+    bool _hasHumidity = true;
 };
 
 float pressureToMmHg(float pressure);      // Convert [Pa] to [mm Hg]

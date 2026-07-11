@@ -14,7 +14,7 @@ float pressureToMmHg(float pressure) {
 
 /* ============ Setup & begin ============ */
 
-bool GyverBME280::begin(void) {
+bool GyverBME280::begin() {
     return begin(0x76);
 }
 
@@ -25,11 +25,11 @@ bool GyverBME280::begin(uint8_t address) {
     if (!reset()) return false;  // BME280 software reset & ack check
     uint8_t ID = readRegister(0xD0);
     if (ID != 0x60 && ID != 0x58) return false;  // Check chip ID (bme/bmp280)
-    readCalibrationData();                       // Read all calibration values
+    _hasHumidity = (ID == 0x60);
+    if (!readCalibrationData()) return false;    // Read all calibration values
 
     /* === Load settings to BME280 === */
-    writeRegister(0xF2, _hum_oversampl);                                                        // write hum oversampling value
-    writeRegister(0xF2, readRegister(0xF2));                                                    // rewrite hum oversampling register
+    if (_hasHumidity) writeRegister(0xF2, _hum_oversampl);                                      // write hum oversampling value
     writeRegister(0xF4, ((_temp_oversampl << 5) | (_press_oversampl << 2) | _operating_mode));  // write temp & press oversampling value , normal mode
     writeRegister(0xF5, ((_standby_time << 5) | (_filter_coef << 2)));                          // write standby time & filter coef
     return true;
@@ -61,7 +61,7 @@ void GyverBME280::setPressOversampling(uint8_t mode) {
 
 /* ============ Reading ============ */
 
-int32_t GyverBME280::readTempInt(void) {
+int32_t GyverBME280::readTempInt() {
     int32_t temp_raw = readRegister24(0xFA);  // Read 24-bit value
     if (temp_raw == 0x800000) return 0;       // If the temperature module has been disabled return '0'
 
@@ -71,13 +71,13 @@ int32_t GyverBME280::readTempInt(void) {
     return ((int32_t)value_1 + value_2);  // Return temperature in integers
 }
 
-float GyverBME280::readTemperature(void) {
+float GyverBME280::readTemperature() {
     int32_t temp_raw = readTempInt();
     float T = (temp_raw * 5 + 128) >> 8;
     return T / 100.0;  // Return temperature in float
 }
 
-float GyverBME280::readPressure(void) {
+float GyverBME280::readPressure() {
     uint32_t press_raw = readRegister24(0xF7);  // Read 24-bit value
     if (press_raw == 0x800000) return 0;        // If the pressure module has been disabled return '0'
 
@@ -100,12 +100,14 @@ float GyverBME280::readPressure(void) {
     return (float)p / 256;  // Return pressure in float
 }
 
-float GyverBME280::readHumidity(void) {
+float GyverBME280::readHumidity() {
+    if (!_hasHumidity) return 0;
+
     Wire.beginTransmission(_i2c_address);  // Start I2C transmission
     Wire.write(0xFD);                      // Request humidity data register
     if (Wire.endTransmission() != 0) return 0;
-    Wire.requestFrom(_i2c_address, 2);                                       // Request humidity data
-    int32_t hum_raw = ((uint16_t)Wire.read() << 8) | (uint16_t)Wire.read();  // Read humidity data
+    if (Wire.requestFrom((uint8_t)_i2c_address, (uint8_t)2) != 2) return 0;  // Request humidity data
+    int32_t hum_raw = ((uint16_t)readByte() << 8) | readByte();              // Read humidity data
     if (hum_raw == 0x8000) return 0;                                         // If the humidity module has been disabled return '0'
 
     int32_t value = (readTempInt() - ((int32_t)76800));  // Start humidity converting
@@ -120,11 +122,11 @@ float GyverBME280::readHumidity(void) {
 
 /* ============ Misc ============ */
 
-bool GyverBME280::isMeasuring(void) {
+bool GyverBME280::isMeasuring() {
     return (bool)((readRegister(0xF3) & 0x08) >> 3);  // Read status register & mask bit "measuring"
 }
 
-void GyverBME280::oneMeasurement(void) {
+void GyverBME280::oneMeasurement() {
     writeRegister(0xF4, ((readRegister(0xF4) & 0xFC) | 0x02));  // Set the operating mode to FORCED_MODE
 }
 
@@ -133,7 +135,7 @@ GyverBME280::GyverBME280() {}
 /* ============ Private ============ */
 
 /* = BME280 software reset = */
-bool GyverBME280::reset(void) {
+bool GyverBME280::reset() {
     if (!writeRegister(0xE0, 0xB6)) return false;
     delay(10);
     return true;
@@ -144,8 +146,8 @@ uint32_t GyverBME280::readRegister24(uint8_t address) {
     Wire.beginTransmission(_i2c_address);
     Wire.write(address);
     if (Wire.endTransmission() != 0) return 0x800000;
-    Wire.requestFrom(_i2c_address, 3);
-    return (((uint32_t)Wire.read() << 16) | ((uint32_t)Wire.read() << 8) | (uint32_t)Wire.read());
+    if (Wire.requestFrom((uint8_t)_i2c_address, (uint8_t)3) != 3) return 0x800000;
+    return (((uint32_t)readByte() << 16) | ((uint32_t)readByte() << 8) | readByte());
 }
 
 /* = Write one 8-bit BME280 register = */
@@ -162,44 +164,69 @@ uint8_t GyverBME280::readRegister(uint8_t address) {
     Wire.beginTransmission(_i2c_address);
     Wire.write(address);
     if (Wire.endTransmission() != 0) return 0;
-    Wire.requestFrom(_i2c_address, 1);
-    return Wire.read();
+    if (Wire.requestFrom((uint8_t)_i2c_address, (uint8_t)1) != 1) return 0;
+    return readByte();
 }
 
 /* = Structure to store all calibration values = */
-void GyverBME280::readCalibrationData(void) {
+bool GyverBME280::readCalibrationData() {
     /* first part request*/
-    Wire.beginTransmission(_i2c_address);
-    Wire.write(0x88);
-    if (Wire.endTransmission() != 0) return;
-    Wire.requestFrom(_i2c_address, 26);
+    if (!requestBytes(0x88, 26)) return false;
     /* reading */
-    CalibrationData._T1 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._T2 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._T3 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P1 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P2 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P3 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P4 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P5 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P6 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P7 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P8 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._P9 = (Wire.read() | (Wire.read() << 8));
-    Wire.read();  // skip 25
-    CalibrationData._H1 = Wire.read();
+    CalibrationData._T1 = readU16LE();
+    CalibrationData._T2 = readS16LE();
+    CalibrationData._T3 = readS16LE();
+    CalibrationData._P1 = readU16LE();
+    CalibrationData._P2 = readS16LE();
+    CalibrationData._P3 = readS16LE();
+    CalibrationData._P4 = readS16LE();
+    CalibrationData._P5 = readS16LE();
+    CalibrationData._P6 = readS16LE();
+    CalibrationData._P7 = readS16LE();
+    CalibrationData._P8 = readS16LE();
+    CalibrationData._P9 = readS16LE();
+    readByte();  // skip 25
+    CalibrationData._H1 = readByte();
+
+    if (!_hasHumidity) return true;
 
     /* second part request*/
-    Wire.beginTransmission(_i2c_address);
-    Wire.write(0xE1);
-    Wire.endTransmission();
-    Wire.requestFrom(_i2c_address, 8);
+    if (!requestBytes(0xE1, 7)) return false;
     /* reading */
-    CalibrationData._H2 = (Wire.read() | (Wire.read() << 8));
-    CalibrationData._H3 = Wire.read();
-    CalibrationData._H4 = (Wire.read() << 4);
-    uint8_t interVal = Wire.read();
-    CalibrationData._H4 |= (interVal & 0xF);
-    CalibrationData._H5 = (((interVal & 0xF0) >> 4) | (Wire.read() << 4));
-    CalibrationData._H6 = Wire.read();
+    CalibrationData._H2 = readS16LE();
+    CalibrationData._H3 = readByte();
+    uint8_t e4 = readByte();
+    uint8_t e5 = readByte();
+    uint8_t e6 = readByte();
+    CalibrationData._H4 = signExtend12(((uint16_t)e4 << 4) | (e5 & 0x0F));
+    CalibrationData._H5 = signExtend12(((uint16_t)e6 << 4) | (e5 >> 4));
+    CalibrationData._H6 = (int8_t)readByte();
+    return true;
+}
+
+uint8_t GyverBME280::readByte() {
+    int value = Wire.read();
+    return (value < 0) ? 0 : (uint8_t)value;
+}
+
+uint16_t GyverBME280::readU16LE() {
+    uint16_t low = readByte();
+    return low | ((uint16_t)readByte() << 8);
+}
+
+int16_t GyverBME280::readS16LE() {
+    return (int16_t)readU16LE();
+}
+
+int16_t GyverBME280::signExtend12(uint16_t value) {
+    value &= 0x0FFF;
+    if (value & 0x0800) value |= 0xF000;
+    return (int16_t)value;
+}
+
+bool GyverBME280::requestBytes(uint8_t address, uint8_t len) {
+    Wire.beginTransmission(_i2c_address);
+    Wire.write(address);
+    if (Wire.endTransmission() != 0) return false;
+    return Wire.requestFrom((uint8_t)_i2c_address, len) == len;
 }

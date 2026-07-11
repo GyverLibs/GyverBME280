@@ -47,13 +47,13 @@ GyverBME280 bme;
 <a id="usage"></a>
 ## Использование
 ```cpp
-bool begin(void);                           // запустить со стандартным адресом (0x76)
+bool begin();                               // запустить со стандартным адресом (0x76)
 bool begin(uint8_t address);                // запустить с указанием адреса
-bool isMeasuring(void);                     // возвращает true, пока идёт измерение
-float readPressure(void);                   // прочитать давление в Па
-float readHumidity(void);                   // Прочитать влажность в %
-void oneMeasurement(void);                  // Сделать одно измерение и уйти в сон
-float readTemperature(void);                // Прочитать температуру в градусах С
+bool isMeasuring();                         // возвращает true, пока идёт измерение
+float readPressure();                       // прочитать давление в Па
+float readHumidity();                       // Прочитать влажность в %
+void oneMeasurement();                      // Сделать одно измерение и уйти в сон
+float readTemperature();                    // Прочитать температуру в градусах С
 
 void setMode(uint8_t mode);                 // установить режим работы
 // режимы:
