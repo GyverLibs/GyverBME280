@@ -49,7 +49,7 @@ GyverBME280 bme;
 ## Use of use
 ```cpp
 bool begin();                               // Start with a standard address (0x76)
-bool begin(uint8_t address);                // launch
+bool begin(TwoWire* wire, uint8_t address); // launch
 bool isMeasuring();                         // It returns true while the measurement is in progress.
 float readPressure();                       // pressurize
 float readHumidity();                       // Read humidity in %

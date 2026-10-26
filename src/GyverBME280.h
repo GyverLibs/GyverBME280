@@ -19,6 +19,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#define DEFAULT_BME280_ADDRESS 0x76
+
 #define NORMAL_MODE 0x03
 #define FORCED_MODE 0x02
 
@@ -50,7 +52,8 @@ class GyverBME280 {
    public:
     GyverBME280();                // Create an object of class BME280
     bool begin();                 // Initialize sensor with standart 0x76 address
-    bool begin(uint8_t address);  // Initialize sensor with not standart 0x76 address
+    bool begin(uint8_t address = DEFAULT_BME280_ADDRESS);                 // Initialize sensor with not standart 0x76 address
+    bool begin(TwoWire* Wire, uint8_t address = DEFAULT_BME280_ADDRESS);  // Initialize sensor with not standart address and wire
     bool isMeasuring();           // Returns 'true' while the measurement is in progress
     float readPressure();         // Read and calculate atmospheric pressure [float , Pa]
     float readHumidity();         // Read and calculate air humidity [float , %]
@@ -65,7 +68,7 @@ class GyverBME280 {
 
    private:
     //============================== DEFAULT SETTINGS ========================================|
-    int _i2c_address = 0x76;                    // BME280 address on I2C bus                  |
+    int _i2c_address = DEFAULT_BME280_ADDRESS;  // BME280 address on I2C bus                  |
     uint8_t _operating_mode = NORMAL_MODE;      // Sensor operation mode                      |
     uint8_t _standby_time = STANDBY_250MS;      // Time between measurements in NORMAL_MODE      |
     uint8_t _filter_coef = FILTER_COEF_16;      // Filter ratio IIR                           |
@@ -107,6 +110,7 @@ class GyverBME280 {
         int8_t _H6;
     } CalibrationData;
     bool _hasHumidity = true;
+    TwoWire* _wire;
 };
 
 float pressureToMmHg(float pressure);      // Convert [Pa] to [mm Hg]

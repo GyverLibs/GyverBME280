@@ -15,13 +15,18 @@ float pressureToMmHg(float pressure) {
 /* ============ Setup & begin ============ */
 
 bool GyverBME280::begin() {
-    return begin(0x76);
+    Wire.begin();
+    return begin(&Wire, DEFAULT_BME280_ADDRESS);
 }
 
 bool GyverBME280::begin(uint8_t address) {
+    Wire.begin();
+    return begin(&Wire, address);
+}
+
+bool GyverBME280::begin(TwoWire* wire, uint8_t address) {
     _i2c_address = address;
-    /* === Start I2C bus & check BME280 === */
-    Wire.begin();                // Start I2C bus
+    _wire = wire;
     if (!reset()) return false;  // BME280 software reset & ack check
     uint8_t ID = readRegister(0xD0);
     if (ID != 0x60 && ID != 0x58) return false;  // Check chip ID (bme/bmp280)
@@ -103,10 +108,10 @@ float GyverBME280::readPressure() {
 float GyverBME280::readHumidity() {
     if (!_hasHumidity) return 0;
 
-    Wire.beginTransmission(_i2c_address);  // Start I2C transmission
-    Wire.write(0xFD);                      // Request humidity data register
-    if (Wire.endTransmission() != 0) return 0;
-    if (Wire.requestFrom((uint8_t)_i2c_address, (uint8_t)2) != 2) return 0;  // Request humidity data
+    _wire->beginTransmission(_i2c_address);  // Start I2C transmission
+    _wire->write(0xFD);                      // Request humidity data register
+    if (_wire->endTransmission() != 0) return 0;
+    if (_wire->requestFrom((uint8_t)_i2c_address, (uint8_t)2) != 2) return 0;  // Request humidity data
     int32_t hum_raw = ((uint16_t)readByte() << 8) | readByte();              // Read humidity data
     if (hum_raw == 0x8000) return 0;                                         // If the humidity module has been disabled return '0'
 
@@ -143,28 +148,28 @@ bool GyverBME280::reset() {
 
 /* = Read and combine three BME280 registers = */
 uint32_t GyverBME280::readRegister24(uint8_t address) {
-    Wire.beginTransmission(_i2c_address);
-    Wire.write(address);
-    if (Wire.endTransmission() != 0) return 0x800000;
-    if (Wire.requestFrom((uint8_t)_i2c_address, (uint8_t)3) != 3) return 0x800000;
+    _wire->beginTransmission(_i2c_address);
+    _wire->write(address);
+    if (_wire->endTransmission() != 0) return 0x800000;
+    if (_wire->requestFrom((uint8_t)_i2c_address, (uint8_t)3) != 3) return 0x800000;
     return (((uint32_t)readByte() << 16) | ((uint32_t)readByte() << 8) | readByte());
 }
 
 /* = Write one 8-bit BME280 register = */
 bool GyverBME280::writeRegister(uint8_t address, uint8_t data) {
-    Wire.beginTransmission(_i2c_address);
-    Wire.write(address);
-    Wire.write(data);
-    if (Wire.endTransmission() != 0) return false;
+    _wire->beginTransmission(_i2c_address);
+    _wire->write(address);
+    _wire->write(data);
+    if (_wire->endTransmission() != 0) return false;
     return true;
 }
 
 /* = Read one 8-bit BME280 register = */
 uint8_t GyverBME280::readRegister(uint8_t address) {
-    Wire.beginTransmission(_i2c_address);
-    Wire.write(address);
-    if (Wire.endTransmission() != 0) return 0;
-    if (Wire.requestFrom((uint8_t)_i2c_address, (uint8_t)1) != 1) return 0;
+    _wire->beginTransmission(_i2c_address);
+    _wire->write(address);
+    if (_wire->endTransmission() != 0) return 0;
+    if (_wire->requestFrom((uint8_t)_i2c_address, (uint8_t)1) != 1) return 0;
     return readByte();
 }
 
@@ -205,7 +210,7 @@ bool GyverBME280::readCalibrationData() {
 }
 
 uint8_t GyverBME280::readByte() {
-    int value = Wire.read();
+    int value = _wire->read();
     return (value < 0) ? 0 : (uint8_t)value;
 }
 
@@ -225,8 +230,8 @@ int16_t GyverBME280::signExtend12(uint16_t value) {
 }
 
 bool GyverBME280::requestBytes(uint8_t address, uint8_t len) {
-    Wire.beginTransmission(_i2c_address);
-    Wire.write(address);
-    if (Wire.endTransmission() != 0) return false;
-    return Wire.requestFrom((uint8_t)_i2c_address, len) == len;
+    _wire->beginTransmission(_i2c_address);
+    _wire->write(address);
+    if (_wire->endTransmission() != 0) return false;
+    return _wire->requestFrom((uint8_t)_i2c_address, len) == len;
 }

@@ -48,7 +48,7 @@ GyverBME280 bme;
 ## Использование
 ```cpp
 bool begin();                               // запустить со стандартным адресом (0x76)
-bool begin(uint8_t address);                // запустить с указанием адреса
+bool begin(TwoWire* wire, uint8_t address); // запустить с указанием шины и адреса, шину нужно инициализировать до вызова этой функции
 bool isMeasuring();                         // возвращает true, пока идёт измерение
 float readPressure();                       // прочитать давление в Па
 float readHumidity();                       // Прочитать влажность в %
